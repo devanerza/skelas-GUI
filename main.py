@@ -51,8 +51,17 @@ for table, route in ENTITY_ROUTES.items():
             return db.list_entities(conn, table)
         return handler
 
+    def update_route(table=table):
+        def handler(pk: str, payload: dict = Body(...), conn=Depends(get_conn)):
+            errors = db.update_entity(conn, table, pk, payload)
+            if errors:
+                raise HTTPException(422, errors)
+            return db.list_entities(conn, table)
+        return handler
+
     app.get(route)(list_route())
     app.post(route, status_code=201)(create_route())
+    app.put(route + "/{pk}")(update_route())
 
 
 @app.delete("/{table}/{pk}")
@@ -122,6 +131,27 @@ def rooms_list(conn=Depends(get_conn)):
 @app.get("/student-groups")
 def groups_list(conn=Depends(get_conn)):
     return db.list_entities(conn, "student_groups")
+
+@app.get("/lecturers/{lecturer_id}/availability")
+def get_lecturer_availability(lecturer_id: str, conn=Depends(get_conn)):
+    if db._check_fk(conn, "lecturers", lecturer_id, "dosen"):
+        raise HTTPException(404, "Dosen tidak ditemukan")
+    av = {}
+    for r in conn.execute(
+            "SELECT day, slot FROM lecturer_availability "
+            "WHERE lecturer_id = ? ORDER BY day, slot", (lecturer_id,)):
+        av.setdefault(r["day"], []).append(r["slot"])
+    return {"lecturer_id": lecturer_id, "availability": av}
+
+@app.put("/lecturers/{lecturer_id}/availability")
+def set_lecturer_availability(lecturer_id: str, payload: dict = Body(...),
+                              conn=Depends(get_conn)):
+    errors = db.set_availability(conn, lecturer_id,
+                                 payload.get("availability") or {})
+    if errors:
+        raise HTTPException(422, errors)
+    return {"lecturer_id": lecturer_id,
+            "availability": payload.get("availability") or {}}
 
 @app.get("/diagnose")
 def diagnose(conn=Depends(get_conn)):

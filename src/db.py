@@ -351,6 +351,22 @@ def delete_entity(conn, table: str, pk: str) -> int:
         cur = conn.execute(f"DELETE FROM {table} WHERE id = ?", (pk,))
     return cur.rowcount
 
+def update_entity(conn, table: str, pk: str, payload: dict) -> List[str]:
+    """Update one entity row's provided columns. Returns error list."""
+    if table not in ENTITY_SPECS:
+        return [f"Unknown table: {table}"]
+    cols = ENTITY_SPECS[table][0]
+    updates = {c: payload[c] for c in cols if c in payload and c != "id"}
+    if not updates:
+        return ["Tidak ada kolom untuk diperbarui"]
+    if "name" in updates and not str(updates["name"] or "").strip():
+        return ["name wajib diisi"]
+    with conn:
+        cur = conn.execute(
+            f"UPDATE {table} SET {', '.join(c + ' = ?' for c in updates)} "
+            f"WHERE id = ?", [*updates.values(), pk])
+    return [] if cur.rowcount else ["Data tidak ditemukan: " + pk]
+
 
 def list_entities(conn, table: str) -> List[dict]:
     if table not in ENTITY_SPECS:
