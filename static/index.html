@@ -550,7 +550,11 @@ async function jreq(path, opts = {}) {
   return r.json();
 }
 const jget  = p => jreq(p);
-const jpost = p => jreq(p, {method: "POST"});
+const jpost = (p, body) => jreq(p, {
+  method: "POST",
+  headers: body ? {"Content-Type": "application/json"} : {},
+  body: body ? JSON.stringify(body) : undefined,
+});
 const jput  = (p, body) => jreq(p, {
   method: "PUT",
   headers: {"Content-Type": "application/json"},
