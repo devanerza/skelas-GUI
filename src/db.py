@@ -358,7 +358,9 @@ def update_entity(conn, table: str, pk: str, payload: dict) -> List[str]:
     if table not in ENTITY_SPECS:
         return [f"Unknown table: {table}"]
     cols = ENTITY_SPECS[table][0]
-    updates = {c: payload[c] for c in cols if c in payload and c != "id"}
+    pk_col = {"courses": "code"}.get(table, "id")
+    updates = {c: payload[c] for c in cols
+               if c in payload and c != pk_col and payload[c] is not None}
     if not updates:
         return ["Tidak ada kolom untuk diperbarui"]
     if "name" in updates and not str(updates["name"] or "").strip():

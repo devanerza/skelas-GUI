@@ -767,15 +767,15 @@ async function loadDiagnose() {
 const PANELS = [
   {title: "Mata Kuliah", table: "courses", edit: true, cols: [
     ["code", "Kode", "mono"], ["name", "Nama", ""],
-    ["credits", "SKS", "mono"], ["room_type_required", "Ruang", "type"]]},
+    ["credits", "SKS", "num"], ["room_type_required", "Ruang", "type"]]},
   {title: "Dosen", table: "lecturers", edit: true, cols: [
     ["id", "ID", "mono"], ["name", "Nama", ""]]},
   {title: "Ruangan", table: "rooms", edit: true, cols: [
     ["id", "ID", "mono"], ["name", "Nama", ""],
-    ["type", "Tipe", "type"], ["capacity", "Kapasitas", "mono"]]},
+    ["type", "Tipe", "type"], ["capacity", "Kapasitas", "num"]]},
   {title: "Kelompok Mahasiswa", table: "student_groups", edit: true, cols: [
     ["id", "ID", "mono"], ["program", "Program", "prog"],
-    ["cohort", "Angkatan", "mono"], ["semester", "Semester", "mono"]]},
+    ["cohort", "Angkatan", "num"], ["semester", "Semester", "num"]]},
 ];
 
 function cellHTML(row, key, cls) {
@@ -861,7 +861,8 @@ async function openLecturerEditor(row) {
 async function openGenericEditor(table, title, cols, row) {
   const ed = $("lecturer-editor");
   ed.hidden = false;
-  const editableCols = cols.filter(c => c[0] !== "id");
+  const pkCol = table === "courses" ? "code" : "id";
+  const editableCols = cols.filter(c => c[0] !== pkCol);
   ed.innerHTML =
     `<div class="panel-head"><h2>Edit ${esc(title)} — ${esc(row.id)}</h2>` +
     `<button class="add" id="ge-close" type="button">Tutup</button></div>` +
@@ -892,7 +893,7 @@ async function openGenericEditor(table, title, cols, row) {
     const payload = {};
     editableCols.forEach(c => {
       const el = $("ge-" + c[0]);
-      payload[c[0]] = c[2] === "mono" ? parseInt(el.value, 10) : el.value;
+      payload[c[0]] = c[2] === "num" ? parseInt(el.value, 10) : el.value;
     });
     const msg = $("ge-msg"), btn = $("ge-save");
     btn.disabled = true;
