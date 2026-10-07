@@ -16,6 +16,7 @@ from .models import (
 )
 
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "skelas.db"
+DEFAULT_DATA = Path(__file__).resolve().parent.parent / "data"
 
 VALID_ROOM_TYPES = ("CLASSROOM", "COMPUTER_LAB", "LOGISTICS_LAB")
 VALID_DAYS = ("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY")
@@ -157,7 +158,8 @@ def _migrate_dropped(conn: sqlite3.Connection) -> None:
 
 # ---------------------------------------------------------------- migration
 
-def seed_from_json(conn: sqlite3.Connection, data_dir="data") -> Dict[str, int]:
+def seed_from_json(conn: sqlite3.Connection,
+                   data_dir=DEFAULT_DATA) -> Dict[str, int]:
     """Wipe all tables and load data/*.json (validated first)."""
     from .validation.validator import DataValidator
 
