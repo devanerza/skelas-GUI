@@ -774,8 +774,9 @@ async function loadDiagnose() {
 /* --------------------------------------------------------------- data */
 const PANELS = [
   {title: "Mata Kuliah", table: "courses", edit: true, cols: [
-    ["code", "Kode", "mono"], ["name", "Nama", ""],
-    ["credits", "SKS", "num"], ["room_type_required", "Ruang", "type"]]},
+    ["id", "ID", "mono"], ["code", "Kode", "mono"], ["name", "Nama", ""],
+    ["curriculum_semester", "Semester", "num"], ["credits", "SKS", "num"],
+    ["room_type_required", "Ruang", "type"]]},
   {title: "Dosen", table: "lecturers", edit: true, cols: [
     ["id", "ID", "mono"], ["name", "Nama", ""]]},
   {title: "Ruangan", table: "rooms", edit: true, cols: [
