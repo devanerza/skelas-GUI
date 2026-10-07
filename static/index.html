@@ -765,15 +765,15 @@ async function loadDiagnose() {
 
 /* --------------------------------------------------------------- data */
 const PANELS = [
-  {title: "Mata Kuliah", table: "courses", cols: [
+  {title: "Mata Kuliah", table: "courses", edit: true, cols: [
     ["code", "Kode", "mono"], ["name", "Nama", ""],
     ["credits", "SKS", "mono"], ["room_type_required", "Ruang", "type"]]},
   {title: "Dosen", table: "lecturers", edit: true, cols: [
     ["id", "ID", "mono"], ["name", "Nama", ""]]},
-  {title: "Ruangan", table: "rooms", cols: [
+  {title: "Ruangan", table: "rooms", edit: true, cols: [
     ["id", "ID", "mono"], ["name", "Nama", ""],
     ["type", "Tipe", "type"], ["capacity", "Kapasitas", "mono"]]},
-  {title: "Kelompok Mahasiswa", table: "student_groups", cols: [
+  {title: "Kelompok Mahasiswa", table: "student_groups", edit: true, cols: [
     ["id", "ID", "mono"], ["program", "Program", "prog"],
     ["cohort", "Angkatan", "mono"], ["semester", "Semester", "mono"]]},
 ];
@@ -858,6 +858,62 @@ async function openLecturerEditor(row) {
   });
 }
 
+async function openGenericEditor(table, title, cols, row) {
+  const ed = $("lecturer-editor");
+  ed.hidden = false;
+  const editableCols = cols.filter(c => c[0] !== "id");
+  ed.innerHTML =
+    `<div class="panel-head"><h2>Edit ${esc(title)} — ${esc(row.id)}</h2>` +
+    `<button class="add" id="ge-close" type="button">Tutup</button></div>` +
+    `<div class="le-body">` +
+    editableCols.map(c => {
+      const key = c[0], label = c[1], cls = c[2];
+      let input;
+      if (cls === "type") {
+        input = `<select id="ge-${key}">` +
+          `<option value="TEORI"${row[key] === "TEORI" ? " selected" : ""}>TEORI</option>` +
+          `<option value="LAB_KOM"${row[key] === "LAB_KOM" ? " selected" : ""}>LAB_KOM</option>` +
+          `<option value="LAB_ELE"${row[key] === "LAB_ELE" ? " selected" : ""}>LAB_ELE</option></select>`;
+      } else if (cls === "prog") {
+        input = `<select id="ge-${key}">` +
+          `<option value="D3"${row[key] === "D3" ? " selected" : ""}>D3</option>` +
+          `<option value="D4"${row[key] === "D4" ? " selected" : ""}>D4</option></select>`;
+      } else {
+        input = `<input id="ge-${key}" value="${esc(row[key])}">`;
+      }
+      return `<div class="le-name-row"><label for="ge-${key}">${label}</label>${input}</div>`;
+    }).join("") +
+    `</div>` +
+    `<div class="le-actions">` +
+    `<button class="btn btn-primary" id="ge-save" type="button">Simpan</button>` +
+    `<span class="hint" id="ge-msg"></span></div>`;
+  $("ge-close").addEventListener("click", () => { ed.hidden = true; });
+  $("ge-save").addEventListener("click", async () => {
+    const payload = {};
+    editableCols.forEach(c => {
+      const el = $("ge-" + c[0]);
+      payload[c[0]] = c[2] === "mono" ? parseInt(el.value, 10) : el.value;
+    });
+    const msg = $("ge-msg"), btn = $("ge-save");
+    btn.disabled = true;
+    msg.textContent = "Menyimpan…";
+    msg.style.color = "#5A615D";
+    try {
+      await jput(`/${table.replace("_", "-")}/${encodeURIComponent(row.id)}`, payload);
+      Object.assign(row, payload);
+      ed.querySelector(".panel-head h2").textContent = `Edit ${title} — ${row.id}`;
+      msg.textContent = "Tersimpan";
+      msg.style.color = "var(--green)";
+      await loadData();
+    } catch (e) {
+      msg.textContent = "Gagal: " + e.message;
+      msg.style.color = "var(--brick)";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 async function loadData() {
   const grid = $("data-grid");
   try {
@@ -882,7 +938,10 @@ async function loadData() {
       if (p.edit) {
         panel.querySelectorAll("tbody tr").forEach((tr, ri) => {
           tr.style.cursor = "pointer";
-          tr.addEventListener("click", () => openLecturerEditor(rows[ri]));
+          tr.addEventListener("click", () => {
+            if (p.table === "lecturers") openLecturerEditor(rows[ri]);
+            else openGenericEditor(p.table, p.title, p.cols, rows[ri]);
+          });
         });
       }
     });
