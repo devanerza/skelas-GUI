@@ -322,6 +322,14 @@ main{
   padding:3px 10px;
 }
 .panel-head .add:hover{background:#F2BC52}
+.panel-foot{
+  background:var(--board);border-top:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:8px;
+}
+.panel-foot .btn{padding:4px 10px;font-size:12px}
+.panel-foot .btn:disabled{opacity:.4;cursor:not-allowed}
+.page-info{font-family:var(--mono);font-size:11px;color:#5A615D}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line)}
 th{
@@ -916,36 +924,71 @@ async function openGenericEditor(table, title, cols, row) {
   });
 }
 
+const PAGE_SIZE = 10;
+const dataPages = {courses: 0, lecturers: 0, rooms: 0, student_groups: 0};
+let dataCache = {};
+
+function renderPanel(p, rows, page) {
+  const start = page * PAGE_SIZE;
+  const pageRows = rows.slice(start, start + PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.dataset.table = p.table;
+  panel.innerHTML =
+    `<div class="panel-head"><h2>${p.title}</h2>` +
+    `<span class="hint">${rows.length} baris${p.edit ? " · klik baris untuk edit" : ""}</span></div>` +
+    `<table><thead><tr>${p.cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
+    pageRows.map((r, ri) => `<tr data-ri="${start + ri}">` + p.cols.map(c =>
+      `<td${c[2] === "mono" ? ' class="mono"' : ""}>${cellHTML(r, c[0], c[2])}</td>`).join("") + "</tr>").join("") +
+    `</tbody></table>` +
+    (totalPages > 1 ? `<div class="panel-foot">` +
+      `<button class="btn" data-page="prev" ${page === 0 ? "disabled" : ""}>«</button>` +
+      `<span class="page-info">${page + 1}/${totalPages}</span>` +
+      `<button class="btn" data-page="next" ${page >= totalPages - 1 ? "disabled" : ""}>»</button>` +
+      `</div>` : "");
+  return panel;
+}
+
+function attachPanelHandlers(panel, p, rows) {
+  if (p.edit) {
+    panel.addEventListener("click", e => {
+      const tr = e.target.closest("tbody tr");
+      if (!tr) return;
+      const ri = parseInt(tr.dataset.ri, 10);
+      if (p.table === "lecturers") openLecturerEditor(rows[ri]);
+      else openGenericEditor(p.table, p.title, p.cols, rows[ri]);
+    });
+    panel.style.cursor = "pointer";
+  }
+  panel.addEventListener("click", e => {
+    const btn = e.target.closest("[data-page]");
+    if (!btn || btn.disabled) return;
+    const dir = btn.dataset.page;
+    const newPage = dir === "prev" ? dataPages[p.table] - 1 : dataPages[p.table] + 1;
+    dataPages[p.table] = Math.max(0, Math.min(newPage, Math.ceil(rows.length / PAGE_SIZE) - 1));
+    const newPanel = renderPanel(p, rows, dataPages[p.table]);
+    panel.replaceWith(newPanel);
+    attachPanelHandlers(newPanel, p, rows);
+  });
+}
+
 async function loadData() {
   const grid = $("data-grid");
   try {
     const results = await Promise.all(
       PANELS.map(p => jget("/" + p.table.replace("_", "-"))));
+    dataCache = {};
+    PANELS.forEach((p, i) => dataCache[p.table] = results[i]);
     grid.innerHTML = "";
-    PANELS.forEach((p, i) => {
-      const rows = results[i];
-      const panel = document.createElement("div");
-      panel.className = "panel";
-      panel.innerHTML =
-        `<div class="panel-head"><h2>${p.title}</h2>` +
-        `<span class="hint">${rows.length} baris${
-          p.edit ? " · klik baris untuk edit" : ""}</span></div>` +
-        `<table><thead><tr>${p.cols.map(c =>
-          `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
-        rows.map(r => "<tr>" + p.cols.map(c =>
-          `<td${c[2] === "mono" ? ' class="mono"' : ""}>${
-            cellHTML(r, c[0], c[2])}</td>`).join("") + "</tr>").join("") +
-        `</tbody></table>`;
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "repeat(4, 1fr)";
+    grid.style.gap = "1rem";
+    PANELS.forEach((p) => {
+      const rows = dataCache[p.table];
+      const panel = renderPanel(p, rows, dataPages[p.table]);
       grid.appendChild(panel);
-      if (p.edit) {
-        panel.querySelectorAll("tbody tr").forEach((tr, ri) => {
-          tr.style.cursor = "pointer";
-          tr.addEventListener("click", () => {
-            if (p.table === "lecturers") openLecturerEditor(rows[ri]);
-            else openGenericEditor(p.table, p.title, p.cols, rows[ri]);
-          });
-        });
-      }
+      attachPanelHandlers(panel, p, rows);
     });
     hideMsg("data-message");
   } catch (e) {
