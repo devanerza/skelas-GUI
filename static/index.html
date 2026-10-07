@@ -924,6 +924,60 @@ async function openGenericEditor(table, title, cols, row) {
   });
 }
 
+async function openCreateModal(table, title, cols) {
+  const ed = $("lecturer-editor");
+  ed.hidden = false;
+  ed.innerHTML =
+    `<div class="panel-head"><h2>Tambah ${esc(title)}</h2>` +
+    `<button class="add" id="cc-close" type="button">Tutup</button></div>` +
+    `<div class="le-body">` +
+    cols.map(c => {
+      const key = c[0], label = c[1], cls = c[2];
+      let input;
+      if (cls === "type") {
+        input = `<select id="cc-${key}">` +
+          `<option value="CLASSROOM">CLASSROOM</option>` +
+          `<option value="COMPUTER_LAB">COMPUTER_LAB</option>` +
+          `<option value="LOGISTICS_LAB">LOGISTICS_LAB</option></select>`;
+      } else if (cls === "prog") {
+        input = `<select id="cc-${key}">` +
+          `<option value="IF">IF</option>` +
+          `<option value="BD">BD</option>` +
+          `<option value="TL">TL</option></select>`;
+      } else {
+        input = `<input id="cc-${key}" placeholder="${label}">`;
+      }
+      return `<div class="le-name-row"><label for="cc-${key}">${label}</label>${input}</div>`;
+    }).join("") +
+    `</div>` +
+    `<div class="le-actions">` +
+    `<button class="btn btn-primary" id="cc-save" type="button">Simpan</button>` +
+    `<span class="hint" id="cc-msg"></span></div>`;
+  $("cc-close").addEventListener("click", () => { ed.hidden = true; });
+  $("cc-save").addEventListener("click", async () => {
+    const payload = {};
+    cols.forEach(c => {
+      const el = $("cc-" + c[0]);
+      payload[c[0]] = c[2] === "num" ? parseInt(el.value, 10) : el.value;
+    });
+    const msg = $("cc-msg"), btn = $("cc-save");
+    btn.disabled = true;
+    msg.textContent = "Menyimpan…";
+    msg.style.color = "#5A615D";
+    try {
+      await jpost(`/${table.replace("_", "-")}`, payload);
+      msg.textContent = "Tersimpan";
+      msg.style.color = "var(--green)";
+      await loadData();
+    } catch (e) {
+      msg.textContent = "Gagal: " + e.message;
+      msg.style.color = "var(--brick)";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 const PAGE_SIZE = 10;
 const dataPages = {courses: 0, lecturers: 0, rooms: 0, student_groups: 0};
 let dataCache = {};
@@ -937,7 +991,7 @@ function renderPanel(p, rows, page) {
   panel.dataset.table = p.table;
   panel.innerHTML =
     `<div class="panel-head"><h2>${p.title}</h2>` +
-    `<span class="hint">${rows.length} baris${p.edit ? " · klik baris untuk edit" : ""}</span></div>` +
+    `<span class="hint">${rows.length} baris · <button class="add" data-create="${p.table}" type="button">Tambah</button></span></div>` +
     `<table><thead><tr>${p.cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
     pageRows.map((r, ri) => `<tr data-ri="${start + ri}">` + p.cols.map(c =>
       `<td${c[2] === "mono" ? ' class="mono"' : ""}>${cellHTML(r, c[0], c[2])}</td>`).join("") + "</tr>").join("") +
@@ -951,16 +1005,20 @@ function renderPanel(p, rows, page) {
 }
 
 function attachPanelHandlers(panel, p, rows) {
-  if (p.edit) {
-    panel.addEventListener("click", e => {
-      const tr = e.target.closest("tbody tr");
-      if (!tr) return;
+  panel.addEventListener("click", e => {
+    const createBtn = e.target.closest("[data-create]");
+    if (createBtn) {
+      openCreateModal(p.table, p.title, p.cols);
+      return;
+    }
+    const tr = e.target.closest("tbody tr");
+    if (tr && p.edit) {
       const ri = parseInt(tr.dataset.ri, 10);
       if (p.table === "lecturers") openLecturerEditor(rows[ri]);
       else openGenericEditor(p.table, p.title, p.cols, rows[ri]);
-    });
-    panel.style.cursor = "pointer";
-  }
+    }
+  });
+  if (p.edit) panel.style.cursor = "pointer";
   panel.addEventListener("click", e => {
     const btn = e.target.closest("[data-page]");
     if (!btn || btn.disabled) return;
