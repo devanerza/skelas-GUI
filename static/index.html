@@ -877,8 +877,9 @@ async function openGenericEditor(table, title, cols, row) {
           `<option value="LOGISTICS_LAB"${row[key] === "LOGISTICS_LAB" ? " selected" : ""}>LOGISTICS_LAB</option></select>`;
       } else if (cls === "prog") {
         input = `<select id="ge-${key}">` +
-          `<option value="D3"${row[key] === "D3" ? " selected" : ""}>D3</option>` +
-          `<option value="D4"${row[key] === "D4" ? " selected" : ""}>D4</option></select>`;
+          `<option value="IF"${row[key] === "IF" ? " selected" : ""}>IF</option>` +
+          `<option value="BD"${row[key] === "BD" ? " selected" : ""}>BD</option>` +
+          `<option value="TL"${row[key] === "TL" ? " selected" : ""}>TL</option></select>`;
       } else {
         input = `<input id="ge-${key}" value="${esc(row[key])}">`;
       }
