@@ -449,6 +449,7 @@ footer{
   </div>
   <nav class="tabs" role="tablist" aria-label="Navigasi utama">
     <button class="tab" role="tab" aria-selected="true" aria-controls="panel-jadwal" id="tab-jadwal">Jadwal</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="panel-enroll" id="tab-enroll">Enrollment</button>
     <button class="tab" role="tab" aria-selected="false" aria-controls="panel-data" id="tab-data">Data</button>
     <button class="tab" role="tab" aria-selected="false" aria-controls="panel-diagnosa" id="tab-diagnosa">Diagnosa</button>
   </nav>
@@ -487,6 +488,22 @@ footer{
 
     <div class="days" id="days" aria-label="Jadwal per hari, kolom = ruangan"></div>
     <div class="diagnose-empty" id="days-empty">Belum ada hasil — klik Susun jadwal</div>
+  </section>
+
+  <!-- ============================================ ENROLLMENT -->
+  <section id="panel-enroll" role="tabpanel" aria-labelledby="tab-enroll" hidden>
+    <div class="toolbar">
+      <div>
+        <h1 class="page-title">Enrollment &amp; Penugasan Dosen</h1>
+        <p class="page-sub">Hubungan mata kuliah — kelompok mahasiswa — dosen</p>
+      </div>
+    </div>
+
+    <div class="panel le-editor" id="enroll-editor" hidden></div>
+
+    <div class="data-grid" id="enroll-grid">
+      <div class="diagnose-empty" id="enroll-loading">Memuat data enrollment…</div>
+    </div>
   </section>
 
   <!-- ============================================ DATA -->
@@ -1096,6 +1113,159 @@ async function validateScheduleOnly() {
   }
 }
 
+/* ----------------------------------------------------------- enrollment */
+let enrollCache = {courses: [], lecturers: [], groups: [], enrollments: [], assignments: []};
+
+async function loadEnrollments() {
+  const grid = $("enroll-grid");
+  try {
+    const [courses, lecturers, groups, enrollments, assignments] = await Promise.all([
+      jget("/courses"), jget("/lecturers"), jget("/student-groups"),
+      jget("/enrollments"), jget("/assignments")
+    ]);
+    enrollCache = {courses, lecturers, groups, enrollments, assignments};
+    grid.innerHTML = "";
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "repeat(2, 1fr)";
+    grid.style.gap = "1rem";
+
+    // Enrollments panel
+    const enrollPanel = document.createElement("div");
+    enrollPanel.className = "panel";
+    enrollPanel.innerHTML =
+      `<div class="panel-head"><h2>Peserta Mata Kuliah</h2>` +
+      `<span class="hint">${enrollments.length} baris · <button class="add" id="add-enroll" type="button">Tambah</button></span></div>` +
+      `<table><thead><tr><th>Mata Kuliah</th><th>Kelompok</th><th></th></tr></thead><tbody>` +
+      enrollments.map(e => `<tr>` +
+        `<td>${esc(e.course_name)} <span class="mono">(${esc(e.course_id)})</span></td>` +
+        `<td>${e.group_id ? `${esc(e.program)}${esc(e.cohort)} <span class="mono">(${esc(e.group_id)})</span>` : "–"}</td>` +
+        `<td><button class="btn" data-del-enroll="${esc(e.course_id)}/${esc(e.group_id || '')}" type="button">×</button></td>` +
+      `</tr>`).join("") + `</tbody></table>`;
+    grid.appendChild(enrollPanel);
+
+    // Assignments panel
+    const assignPanel = document.createElement("div");
+    assignPanel.className = "panel";
+    assignPanel.innerHTML =
+      `<div class="panel-head"><h2>Penugasan Dosen</h2>` +
+      `<span class="hint">${assignments.length} baris · <button class="add" id="add-assign" type="button">Tambah</button></span></div>` +
+      `<table><thead><tr><th>Mata Kuliah</th><th>Dosen</th><th></th></tr></thead><tbody>` +
+      assignments.map(a => `<tr>` +
+        `<td>${esc(a.course_name)} <span class="mono">(${esc(a.course_id)})</span></td>` +
+        `<td>${esc(a.lecturer_name)} <span class="mono">(${esc(a.lecturer_id)})</span></td>` +
+        `<td><button class="btn" data-del-assign="${esc(a.course_id)}/${esc(a.lecturer_id)}" type="button">×</button></td>` +
+      `</tr>`).join("") + `</tbody></table>`;
+    grid.appendChild(assignPanel);
+
+    // Add event handlers
+    $("add-enroll").addEventListener("click", () => openEnrollEditor());
+    $("add-assign").addEventListener("click", () => openAssignEditor());
+    enrollPanel.addEventListener("click", async e => {
+      const btn = e.target.closest("[data-del-enroll]");
+      if (btn) {
+        if (!confirm("Hapus enrollment ini?")) return;
+        try {
+          await jreq(`/enrollments/${btn.dataset.delEnroll}`, {method: "DELETE"});
+          await loadEnrollments();
+        } catch (err) { alert("Gagal: " + err.message); }
+      }
+    });
+    assignPanel.addEventListener("click", async e => {
+      const btn = e.target.closest("[data-del-assign]");
+      if (btn) {
+        if (!confirm("Hapus penugasan ini?")) return;
+        try {
+          await jreq(`/assignments/${btn.dataset.delAssign}`, {method: "DELETE"});
+          await loadEnrollments();
+        } catch (err) { alert("Gagal: " + err.message); }
+      }
+    });
+  } catch (e) {
+    grid.innerHTML = `<div class="diagnose-empty">Gagal memuat: ${esc(e.message)}</div>`;
+  }
+}
+
+function openEnrollEditor() {
+  const ed = $("enroll-editor");
+  ed.hidden = false;
+  const courseOpts = enrollCache.courses.map(c =>
+    `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.id)})</option>`).join("");
+  const groupOpts = `<option value="">(tidak ada kelompok)</option>` +
+    enrollCache.groups.map(g =>
+      `<option value="${esc(g.id)}">${esc(g.program)}${esc(g.cohort)} (${esc(g.id)})</option>`).join("");
+  ed.innerHTML =
+    `<div class="panel-head"><h2>Tambah Peserta MK</h2>` +
+    `<button class="add" id="en-close" type="button">Tutup</button></div>` +
+    `<div class="le-body">` +
+    `<div class="le-name-row"><label for="en-course">Mata Kuliah</label>` +
+    `<select id="en-course">${courseOpts}</select></div>` +
+    `<div class="le-name-row"><label for="en-group">Kelompok</label>` +
+    `<select id="en-group">${groupOpts}</select></div>` +
+    `</div>` +
+    `<div class="le-actions">` +
+    `<button class="btn btn-primary" id="en-save" type="button">Simpan</button>` +
+    `<span class="hint" id="en-msg"></span></div>`;
+  $("en-close").addEventListener("click", () => { ed.hidden = true; });
+  $("en-save").addEventListener("click", async () => {
+    const payload = {course_id: $("en-course").value, group_id: $("en-group").value || null};
+    const msg = $("en-msg"), btn = $("en-save");
+    btn.disabled = true;
+    msg.textContent = "Menyimpan…";
+    try {
+      await jpost("/enrollments", payload);
+      msg.textContent = "Tersimpan";
+      msg.style.color = "var(--green)";
+      await loadEnrollments();
+      ed.hidden = true;
+    } catch (e) {
+      msg.textContent = "Gagal: " + e.message;
+      msg.style.color = "var(--brick)";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function openAssignEditor() {
+  const ed = $("enroll-editor");
+  ed.hidden = false;
+  const courseOpts = enrollCache.courses.map(c =>
+    `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.id)})</option>`).join("");
+  const lectOpts = enrollCache.lecturers.map(l =>
+    `<option value="${esc(l.id)}">${esc(l.name)} (${esc(l.id)})</option>`).join("");
+  ed.innerHTML =
+    `<div class="panel-head"><h2>Tambah Penugasan Dosen</h2>` +
+    `<button class="add" id="as-close" type="button">Tutup</button></div>` +
+    `<div class="le-body">` +
+    `<div class="le-name-row"><label for="as-course">Mata Kuliah</label>` +
+    `<select id="as-course">${courseOpts}</select></div>` +
+    `<div class="le-name-row"><label for="as-lect">Dosen</label>` +
+    `<select id="as-lect">${lectOpts}</select></div>` +
+    `</div>` +
+    `<div class="le-actions">` +
+    `<button class="btn btn-primary" id="as-save" type="button">Simpan</button>` +
+    `<span class="hint" id="as-msg"></span></div>`;
+  $("as-close").addEventListener("click", () => { ed.hidden = true; });
+  $("as-save").addEventListener("click", async () => {
+    const payload = {course_id: $("as-course").value, lecturer_id: $("as-lect").value};
+    const msg = $("as-msg"), btn = $("as-save");
+    btn.disabled = true;
+    msg.textContent = "Menyimpan…";
+    try {
+      await jpost("/assignments", payload);
+      msg.textContent = "Tersimpan";
+      msg.style.color = "var(--green)";
+      await loadEnrollments();
+      ed.hidden = true;
+    } catch (e) {
+      msg.textContent = "Gagal: " + e.message;
+      msg.style.color = "var(--brick)";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 /* -------------------------------------------------------- tab wiring */
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 function select(tab){
@@ -1114,7 +1284,10 @@ tabs.forEach(t=>{
   });
 });
 
-const loaded = {data: false, diagnosa: false};
+const loaded = {enroll: false, data: false, diagnosa: false};
+document.getElementById("tab-enroll").addEventListener("click", () => {
+  if (!loaded.enroll) { loaded.enroll = true; loadEnrollments(); }
+});
 document.getElementById("tab-diagnosa").addEventListener("click", () => {
   if (!loaded.diagnosa) { loaded.diagnosa = true; loadDiagnose(); }
 });

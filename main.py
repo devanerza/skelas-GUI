@@ -153,6 +153,81 @@ def set_lecturer_availability(lecturer_id: str, payload: dict = Body(...),
     return {"lecturer_id": lecturer_id,
             "availability": payload.get("availability") or {}}
 
+# ----------------------------------------------------------- enrollments
+
+@app.get("/enrollments")
+def list_enrollments(conn=Depends(get_conn)):
+    return [dict(r) for r in conn.execute(
+        "SELECT ce.course_id, c.name as course_name, ce.group_id, sg.program, sg.cohort "
+        "FROM course_enrollments ce "
+        "JOIN courses c ON ce.course_id = c.id "
+        "LEFT JOIN student_groups sg ON ce.group_id = sg.id "
+        "ORDER BY ce.course_id, ce.group_id")]
+
+@app.post("/enrollments", status_code=201)
+def create_enrollment(payload: dict = Body(...), conn=Depends(get_conn)):
+    course_id = payload.get("course_id")
+    group_id = payload.get("group_id")
+    if not course_id:
+        raise HTTPException(422, ["course_id wajib diisi"])
+    if db._check_fk(conn, "courses", course_id, "mata kuliah"):
+        raise HTTPException(404, "Mata kuliah tidak ditemukan")
+    if group_id and db._check_fk(conn, "student_groups", group_id, "kelompok mahasiswa"):
+        raise HTTPException(404, "Kelompok mahasiswa tidak ditemukan")
+    try:
+        conn.execute("INSERT INTO course_enrollments (course_id, group_id) VALUES (?, ?)",
+                     (course_id, group_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(422, ["Enrollment sudah ada"])
+    return list_enrollments(conn)
+
+@app.delete("/enrollments/{course_id}/{group_id}")
+def delete_enrollment(course_id: str, group_id: str, conn=Depends(get_conn)):
+    cur = conn.execute("DELETE FROM course_enrollments WHERE course_id = ? AND group_id = ?",
+                       (course_id, group_id))
+    conn.commit()
+    if cur.rowcount == 0:
+        raise HTTPException(404, "Enrollment tidak ditemukan")
+    return {"deleted": True}
+
+@app.get("/assignments")
+def list_assignments(conn=Depends(get_conn)):
+    return [dict(r) for r in conn.execute(
+        "SELECT ta.course_id, c.name as course_name, ta.lecturer_id, l.name as lecturer_name "
+        "FROM teaching_assignments ta "
+        "JOIN courses c ON ta.course_id = c.id "
+        "JOIN lecturers l ON ta.lecturer_id = l.id "
+        "ORDER BY ta.course_id, ta.lecturer_id")]
+
+@app.post("/assignments", status_code=201)
+def create_assignment(payload: dict = Body(...), conn=Depends(get_conn)):
+    course_id = payload.get("course_id")
+    lecturer_id = payload.get("lecturer_id")
+    if not course_id or not lecturer_id:
+        raise HTTPException(422, ["course_id dan lecturer_id wajib diisi"])
+    if db._check_fk(conn, "courses", course_id, "mata kuliah"):
+        raise HTTPException(404, "Mata kuliah tidak ditemukan")
+    if db._check_fk(conn, "lecturers", lecturer_id, "dosen"):
+        raise HTTPException(404, "Dosen tidak ditemukan")
+    try:
+        conn.execute("INSERT INTO teaching_assignments (course_id, lecturer_id) VALUES (?, ?)",
+                     (course_id, lecturer_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(422, ["Penugasan sudah ada"])
+    return list_assignments(conn)
+
+@app.delete("/assignments/{course_id}/{lecturer_id}")
+def delete_assignment(course_id: str, lecturer_id: str, conn=Depends(get_conn)):
+    cur = conn.execute("DELETE FROM teaching_assignments WHERE course_id = ? AND lecturer_id = ?",
+                       (course_id, lecturer_id))
+    conn.commit()
+    if cur.rowcount == 0:
+        raise HTTPException(404, "Penugasan tidak ditemukan")
+    return {"deleted": True}
+
+
 @app.get("/diagnose")
 def diagnose(conn=Depends(get_conn)):
     """Diagnosis for the latest run: dropped-course cards (PARTIAL), or
