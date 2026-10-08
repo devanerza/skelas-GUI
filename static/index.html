@@ -836,12 +836,25 @@ async function openLecturerEditor(row) {
       ed.querySelectorAll("input[type=checkbox]:checked").length)}</p>` +
     `<div class="le-actions">` +
     `<button class="btn btn-primary" id="le-save" type="button">Simpan</button>` +
+    `<button class="btn" id="le-delete" type="button" style="margin-left:8px">Hapus</button>` +
     `<span class="hint" id="le-msg"></span></div>`;
   ed.querySelectorAll("input[type=checkbox]").forEach(cb =>
     cb.addEventListener("change", () => {
       $("le-total").textContent = totalHTML(
         ed.querySelectorAll("input[type=checkbox]:checked").length);
     }));
+  $("le-delete").addEventListener("click", async () => {
+    if (!confirm(`Hapus dosen "${row.id}"?`)) return;
+    const msg = $("le-msg");
+    try {
+      await jreq(`/lecturers/${encodeURIComponent(row.id)}`, {method: "DELETE"});
+      ed.hidden = true;
+      await loadData();
+    } catch (e) {
+      msg.textContent = "Gagal hapus: " + e.message;
+      msg.style.color = "var(--brick)";
+    }
+  });
   $("le-save").addEventListener("click", async () => {
     const name = $("le-name").value.trim() || row.name;
     const newAv = {};
@@ -901,8 +914,21 @@ async function openGenericEditor(table, title, cols, row) {
     `</div>` +
     `<div class="le-actions">` +
     `<button class="btn btn-primary" id="ge-save" type="button">Simpan</button>` +
+    `<button class="btn" id="ge-delete" type="button" style="margin-left:8px">Hapus</button>` +
     `<span class="hint" id="ge-msg"></span></div>`;
   $("ge-close").addEventListener("click", () => { ed.hidden = true; });
+  $("ge-delete").addEventListener("click", async () => {
+    if (!confirm(`Hapus ${title} "${row.id}"?`)) return;
+    const msg = $("ge-msg");
+    try {
+      await jreq(`/${table.replace("_", "-")}/${encodeURIComponent(row.id)}`, {method: "DELETE"});
+      ed.hidden = true;
+      await loadData();
+    } catch (e) {
+      msg.textContent = "Gagal hapus: " + e.message;
+      msg.style.color = "var(--brick)";
+    }
+  });
   $("ge-save").addEventListener("click", async () => {
     const payload = {};
     editableCols.forEach(c => {
