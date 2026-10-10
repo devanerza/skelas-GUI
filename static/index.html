@@ -497,6 +497,9 @@ footer{
         <h1 class="page-title">Enrollment &amp; Penugasan Dosen</h1>
         <p class="page-sub">Hubungan mata kuliah — kelompok mahasiswa — dosen</p>
       </div>
+      <div class="actions">
+        <input type="search" id="enroll-search" placeholder="Cari mata kuliah…" class="search-input">
+      </div>
     </div>
 
     <div class="panel le-editor" id="enroll-editor" hidden></div>
@@ -1116,6 +1119,74 @@ async function validateScheduleOnly() {
 /* ----------------------------------------------------------- enrollment */
 let enrollCache = {courses: [], lecturers: [], groups: [], enrollments: [], assignments: []};
 
+function renderEnrollGrid(filter = "") {
+  const grid = $("enroll-grid");
+  const q = filter.toLowerCase();
+  const filteredEnroll = enrollCache.enrollments.filter(e =>
+    !q || e.course_name.toLowerCase().includes(q) || e.course_id.toLowerCase().includes(q)
+  );
+  const filteredAssign = enrollCache.assignments.filter(a =>
+    !q || a.course_name.toLowerCase().includes(q) || a.course_id.toLowerCase().includes(q)
+  );
+
+  grid.innerHTML = "";
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "repeat(2, 1fr)";
+  grid.style.gap = "1rem";
+
+  // Enrollments panel
+  const enrollPanel = document.createElement("div");
+  enrollPanel.className = "panel";
+  enrollPanel.innerHTML =
+    `<div class="panel-head"><h2>Peserta Mata Kuliah</h2>` +
+    `<span class="hint">${filteredEnroll.length} baris · <button class="add" id="add-enroll" type="button">Tambah</button></span></div>` +
+    `<table><thead><tr><th>Mata Kuliah</th><th>Kelompok</th><th></th></tr></thead><tbody>` +
+    filteredEnroll.map(e => `<tr>` +
+      `<td>${esc(e.course_name)} <span class="mono">(${esc(e.course_id)})</span></td>` +
+      `<td>${e.group_id ? `${esc(e.program)}${esc(e.cohort)} <span class="mono">(${esc(e.group_id)})</span>` : "–"}</td>` +
+      `<td><button class="btn" data-del-enroll="${esc(e.course_id)}/${esc(e.group_id || '')}" type="button">×</button></td>` +
+    `</tr>`).join("") + `</tbody></table>`;
+  grid.appendChild(enrollPanel);
+
+  // Assignments panel
+  const assignPanel = document.createElement("div");
+  assignPanel.className = "panel";
+  assignPanel.innerHTML =
+    `<div class="panel-head"><h2>Penugasan Dosen</h2>` +
+    `<span class="hint">${filteredAssign.length} baris · <button class="add" id="add-assign" type="button">Tambah</button></span></div>` +
+    `<table><thead><tr><th>Mata Kuliah</th><th>Dosen</th><th></th></tr></thead><tbody>` +
+    filteredAssign.map(a => `<tr>` +
+      `<td>${esc(a.course_name)} <span class="mono">(${esc(a.course_id)})</span></td>` +
+      `<td>${esc(a.lecturer_name)} <span class="mono">(${esc(a.lecturer_id)})</span></td>` +
+      `<td><button class="btn" data-del-assign="${esc(a.course_id)}/${esc(a.lecturer_id)}" type="button">×</button></td>` +
+    `</tr>`).join("") + `</tbody></table>`;
+  grid.appendChild(assignPanel);
+
+  // Add event handlers
+  $("add-enroll").addEventListener("click", () => openEnrollEditor());
+  $("add-assign").addEventListener("click", () => openAssignEditor());
+  enrollPanel.addEventListener("click", async e => {
+    const btn = e.target.closest("[data-del-enroll]");
+    if (btn) {
+      if (!confirm("Hapus enrollment ini?")) return;
+      try {
+        await jreq(`/enrollments/${btn.dataset.delEnroll}`, {method: "DELETE"});
+        await loadEnrollments();
+      } catch (err) { alert("Gagal: " + err.message); }
+    }
+  });
+  assignPanel.addEventListener("click", async e => {
+    const btn = e.target.closest("[data-del-assign]");
+    if (btn) {
+      if (!confirm("Hapus penugasan ini?")) return;
+      try {
+        await jreq(`/assignments/${btn.dataset.delAssign}`, {method: "DELETE"});
+        await loadEnrollments();
+      } catch (err) { alert("Gagal: " + err.message); }
+    }
+  });
+}
+
 async function loadEnrollments() {
   const grid = $("enroll-grid");
   try {
@@ -1124,62 +1195,7 @@ async function loadEnrollments() {
       jget("/enrollments"), jget("/assignments")
     ]);
     enrollCache = {courses, lecturers, groups, enrollments, assignments};
-    grid.innerHTML = "";
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = "repeat(2, 1fr)";
-    grid.style.gap = "1rem";
-
-    // Enrollments panel
-    const enrollPanel = document.createElement("div");
-    enrollPanel.className = "panel";
-    enrollPanel.innerHTML =
-      `<div class="panel-head"><h2>Peserta Mata Kuliah</h2>` +
-      `<span class="hint">${enrollments.length} baris · <button class="add" id="add-enroll" type="button">Tambah</button></span></div>` +
-      `<table><thead><tr><th>Mata Kuliah</th><th>Kelompok</th><th></th></tr></thead><tbody>` +
-      enrollments.map(e => `<tr>` +
-        `<td>${esc(e.course_name)} <span class="mono">(${esc(e.course_id)})</span></td>` +
-        `<td>${e.group_id ? `${esc(e.program)}${esc(e.cohort)} <span class="mono">(${esc(e.group_id)})</span>` : "–"}</td>` +
-        `<td><button class="btn" data-del-enroll="${esc(e.course_id)}/${esc(e.group_id || '')}" type="button">×</button></td>` +
-      `</tr>`).join("") + `</tbody></table>`;
-    grid.appendChild(enrollPanel);
-
-    // Assignments panel
-    const assignPanel = document.createElement("div");
-    assignPanel.className = "panel";
-    assignPanel.innerHTML =
-      `<div class="panel-head"><h2>Penugasan Dosen</h2>` +
-      `<span class="hint">${assignments.length} baris · <button class="add" id="add-assign" type="button">Tambah</button></span></div>` +
-      `<table><thead><tr><th>Mata Kuliah</th><th>Dosen</th><th></th></tr></thead><tbody>` +
-      assignments.map(a => `<tr>` +
-        `<td>${esc(a.course_name)} <span class="mono">(${esc(a.course_id)})</span></td>` +
-        `<td>${esc(a.lecturer_name)} <span class="mono">(${esc(a.lecturer_id)})</span></td>` +
-        `<td><button class="btn" data-del-assign="${esc(a.course_id)}/${esc(a.lecturer_id)}" type="button">×</button></td>` +
-      `</tr>`).join("") + `</tbody></table>`;
-    grid.appendChild(assignPanel);
-
-    // Add event handlers
-    $("add-enroll").addEventListener("click", () => openEnrollEditor());
-    $("add-assign").addEventListener("click", () => openAssignEditor());
-    enrollPanel.addEventListener("click", async e => {
-      const btn = e.target.closest("[data-del-enroll]");
-      if (btn) {
-        if (!confirm("Hapus enrollment ini?")) return;
-        try {
-          await jreq(`/enrollments/${btn.dataset.delEnroll}`, {method: "DELETE"});
-          await loadEnrollments();
-        } catch (err) { alert("Gagal: " + err.message); }
-      }
-    });
-    assignPanel.addEventListener("click", async e => {
-      const btn = e.target.closest("[data-del-assign]");
-      if (btn) {
-        if (!confirm("Hapus penugasan ini?")) return;
-        try {
-          await jreq(`/assignments/${btn.dataset.delAssign}`, {method: "DELETE"});
-          await loadEnrollments();
-        } catch (err) { alert("Gagal: " + err.message); }
-      }
-    });
+    renderEnrollGrid($("enroll-search").value);
   } catch (e) {
     grid.innerHTML = `<div class="diagnose-empty">Gagal memuat: ${esc(e.message)}</div>`;
   }
@@ -1290,6 +1306,10 @@ document.getElementById("tab-enroll").addEventListener("click", () => {
 });
 document.getElementById("tab-diagnosa").addEventListener("click", () => {
   if (!loaded.diagnosa) { loaded.diagnosa = true; loadDiagnose(); }
+});
+
+$("enroll-search").addEventListener("input", e => {
+  if (loaded.enroll) renderEnrollGrid(e.target.value);
 });
 document.getElementById("tab-data").addEventListener("click", () => {
   if (!loaded.data) { loaded.data = true; loadData(); }
