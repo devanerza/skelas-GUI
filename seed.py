@@ -894,3 +894,14 @@ def seed(conn: sqlite3.Connection):
     conn.execute('INSERT INTO time_slots (slot, start, end) VALUES (?, ?, ?)', (9, '15:15', '16:00'))
 
     conn.commit()
+
+
+if __name__ == "__main__":
+    from src import db
+    conn = db.connect()
+    # Wipe existing data
+    for tbl in ["lecturer_availability", "teaching_assignments", "course_enrollments",
+                "courses", "student_groups", "rooms", "lecturers", "time_slots"]:
+        conn.execute(f"DELETE FROM {tbl}")
+    seed(conn)
+    print("✓ Database seeded")
